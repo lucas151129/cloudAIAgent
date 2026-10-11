@@ -242,7 +242,7 @@ function boardRows(rows, mode, max) {
 }
 
 const PET_STAGES = ["bubble", "baby", "grow", "adult", "scholar"];
-const PET_SPECIES = ["tabby", "fluff", "dog"];
+const PET_SPECIES = ["tabby", "fluff", "dog", "husky", "golden", "shiba", "macaw", "bunny", "panda", "redpanda", "tortoise"];
 
 function petSrc(species, stage) {
   const kind = PET_SPECIES.includes(species) ? species : "dog";

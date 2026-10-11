@@ -316,7 +316,7 @@ const Store = (() => {
   const COIN_DAILY = 100;
   const PET_NEED = [0, 100, 400, 1100, 2500];
   const PET_IDS = ["bubble", "baby", "grow", "adult", "scholar"];
-  const PET_SPECIES = ["tabby", "fluff", "dog"];
+  const PET_SPECIES = ["tabby", "fluff", "dog", "husky", "golden", "shiba", "macaw", "bunny", "panda", "redpanda", "tortoise"];
   const PET_REPLACE = { cat: "tabby", rabbit: "dog" };
 
   function replaceRetired(row) {
