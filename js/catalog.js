@@ -98,6 +98,16 @@ const GAMES = [
     entry: "games/math/snake/index.html",
   },
   {
+    id: "math-thunder",
+    category: "math",
+    title: "雷霆算式",
+    level: "upper",
+    blurb: "用手牌組出算式，擊破敵機。累計 800 零件就是滿分。",
+    maxScore: 800,
+    icon: "assets/games/math-thunder.png?v=1",
+    entry: "games/math/thunder/index.html",
+  },
+  {
     id: "math-fish",
     category: "math",
     title: "狂爆金幣",
