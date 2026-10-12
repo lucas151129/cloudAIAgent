@@ -1,0 +1,33 @@
+{
+  "id": "heat-c-014",
+  "chapterId": "heat",
+  "knowledgePointIds": ["heat.capacity"],
+  "inScope": true,
+  "type": "numeric",
+  "marks": 3,
+  "stem": "質量 0.50 kg 的鋁塊，溫度由 20.0 °C 升至 80.0 °C，吸收了 2.70 × 10^4 J 的熱。求鋁的比熱容量。",
+  "answer": {
+    "value": 900,
+    "tolerance": 0.02,
+    "unit": "J kg^-1 °C^-1"
+  },
+  "workedSolution": [
+    "ΔT = 80.0 − 20.0 = 60.0 °C",
+    "c = Q / (m ΔT)",
+    "c = 2.70 × 10^4 / (0.50 × 60.0) = 9.00 × 10^2 J kg^-1 °C^-1"
+  ],
+  "commonErrors": [
+    {
+      "value": 54000,
+      "tolerance": 0.02,
+      "marks": 1,
+      "reason": "未除以溫差，算出的是 Q/m"
+    },
+    {
+      "value": 450,
+      "tolerance": 0.02,
+      "marks": 1,
+      "reason": "算出的是熱容量 C = Q/ΔT"
+    }
+  ]
+}
