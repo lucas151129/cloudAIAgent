@@ -43,12 +43,13 @@
     display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px;
     max-width: min(96vw, 640px);
   }
-  .seg, .tools > button { background: #fff; border-radius: 999px; box-shadow: var(--shadow); }
+  .seg, .tools > button, .tools > a.tool { background: #fff; border-radius: 999px; box-shadow: var(--shadow); }
   .seg { display: flex; padding: 4px; gap: 4px; }
-  .seg button, .tools > button {
+  .seg button, .tools > button, .tools > a.tool {
     border-radius: 999px; padding: 8px 12px; font-weight: 800; font-size: 15px; background: transparent;
+    color: var(--ink); text-decoration: none;
   }
-  .tools > button { background: #fff; }
+  .tools > button, .tools > a.tool { background: #fff; }
   .seg button.on { background: var(--teal); color: #fff; }
   .app { width: min(1180px, 100%); margin: 0 auto; }
   .hud {
@@ -432,6 +433,7 @@
     </div>
     <button type="button" data-act="mute" id="muteBtn">🔇 開音效</button>
     <button type="button" data-act="open-how">玩法說明</button>
+    <a class="tool" href="judge.html">比賽計分</a>
     <button type="button" data-act="full">全螢幕</button>
   </div>
 

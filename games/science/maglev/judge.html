@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c8f86">
+<title>磁浮列車計分｜老師</title>
+<link rel="stylesheet" href="meet.css?v=2">
+</head>
+<body class="judge">
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <p class="kicker">樂善堂梁銶琚學校 · 小學三年級</p>
+        <h1>磁浮列車計分</h1>
+        <p class="lead">五班 A 至 E，每班可設 4 至 8 組，預設 5 組。每組輸入兩次完賽時間（秒）。完成時間取較快的一次，速率＝6 米÷完成時間。大螢幕只顯示每班前三名。</p>
+      </div>
+      <div class="actions">
+        <a class="primary" href="board.html" target="_blank" rel="noopener">打開大螢幕</a>
+        <button type="button" class="warn" id="clear-all">清除全部成績</button>
+      </div>
+    </header>
+    <p class="status" id="status" role="status">正在讀取成績…</p>
+    <main id="classes"></main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../../../js/supabase-config.js?v=2"></script>
+  <script src="meet.js?v=2"></script>
+  <script>
+    var session = null;
+    var state = MaglevMeet.blank();
+
+    function esc(value) {
+      return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+      });
+    }
+
+    function paintStatus(view) {
+      var el = document.getElementById("status");
+      el.className = "status " + view.status;
+      if (view.status === "cloud") {
+        el.textContent = "已連上雲端。另一部裝置打開大螢幕，會即時看到這裡的成績。";
+      } else if (view.status === "need-sql") {
+        el.textContent = "雲端成績表還沒建立，現在只在這部瀏覽器同步。請到 Supabase SQL Editor 執行 supabase/maglev-board.sql。";
+      } else if (view.status === "error") {
+        el.textContent = "雲端暫時寫不入，這部瀏覽器裡的成績仍會保留。";
+      } else {
+        el.textContent = "尚未連上雲端。同一部電腦的大螢幕分頁會跟著更新。";
+      }
+    }
+
+    function fieldText(value) {
+      return value == null ? "" : MaglevMeet.formatNum(value);
+    }
+
+    function render() {
+      var html = "";
+      state.classes.forEach(function (klass) {
+        var ranks = MaglevMeet.ranked(klass.groups);
+        var byId = {};
+        ranks.forEach(function (row) { byId[row.id] = row; });
+        var done = ranks.length;
+        html += '<section class="class-card" data-class="' + klass.id + '">';
+        html += '<div class="class-head"><div><h2>' + esc(klass.name) + '</h2>';
+        html += '<p>' + done + ' 組已有成績</p></div>';
+        html += '<div class="class-tools">';
+        html += '<button type="button" class="add" data-act="add" data-class="' + klass.id + '"' + (klass.groups.length >= MaglevMeet.MAX_GROUPS ? " disabled" : "") + '>加一組</button>';
+        html += '<button type="button" data-act="clear-class" data-class="' + klass.id + '">清除此班成績</button>';
+        html += '</div></div>';
+        html += '<div class="sheet"><div class="sheet-head"><span>組別</span><span>第 1 次（秒）</span><span>第 2 次（秒）</span><span>完成時間</span><span>速率</span><span>名次</span><span></span></div>';
+        klass.groups.forEach(function (group, index) {
+          var row = byId[group.id];
+          var place = row ? row.place : 0;
+          var placeText = place ? "第" + place + "名" : "—";
+          html += '<div class="grow">';
+          html += '<input class="label" type="text" maxlength="10" autocomplete="off" data-class="' + klass.id + '" data-gid="' + esc(group.id) + '" data-field="label" value="' + esc(group.label) + '" aria-label="' + esc(klass.name + " " + MaglevMeet.groupTitle(group, index) + " 名稱") + '">';
+          html += timeCell(klass, group, index, "t1", row);
+          html += timeCell(klass, group, index, "t2", row);
+          html += '<div class="best num">' + (row ? MaglevMeet.formatNum(row.best) + " 秒" : "—") + '</div>';
+          html += '<div class="rate num">' + (row ? MaglevMeet.formatNum(row.speed) + " 米/秒" : "—") + '</div>';
+          html += '<div class="place num' + (place && place <= 3 ? " p" + place : "") + '">' + placeText + '</div>';
+          html += '<button type="button" class="row-x" data-act="remove" data-class="' + klass.id + '" data-gid="' + esc(group.id) + '"' + (klass.groups.length <= 1 ? " disabled" : "") + '>移除</button>';
+          html += '</div>';
+        });
+        html += '</div></section>';
+      });
+      document.getElementById("classes").innerHTML = html;
+    }
+
+    function timeCell(klass, group, index, field, row) {
+      var used = row && ((field === "t1" && row.which === 1) || (field === "t2" && row.which === 2));
+      var label = klass.name + " " + MaglevMeet.groupTitle(group, index) + (field === "t1" ? " 第1次" : " 第2次");
+      var caption = field === "t1" ? "第 1 次（秒）" : "第 2 次（秒）";
+      return '<label class="mini"><span>' + caption + '</span><input class="time num' + (used ? " used" : "") + '" type="text" inputmode="decimal" autocomplete="off" data-class="' + klass.id + '" data-gid="' + esc(group.id) + '" data-field="' + field + '" value="' + esc(fieldText(group[field])) + '" aria-label="' + esc(label) + '"></label>';
+    }
+
+    function paintDerived() {
+      state.classes.forEach(function (klass) {
+        var card = document.querySelector('.class-card[data-class="' + klass.id + '"]');
+        if (!card) return;
+        var ranks = MaglevMeet.ranked(klass.groups);
+        var byId = {};
+        ranks.forEach(function (row) { byId[row.id] = row; });
+        var summary = card.querySelector(".class-head p");
+        if (summary) summary.textContent = ranks.length + " 組已有成績";
+        var rows = card.querySelectorAll(".grow");
+        klass.groups.forEach(function (group, index) {
+          var tr = rows[index];
+          if (!tr) return;
+          var row = byId[group.id];
+          var placeNum = row ? row.place : 0;
+          var best = tr.querySelector(".best");
+          var rate = tr.querySelector(".rate");
+          var place = tr.querySelector(".place");
+          if (best) best.textContent = row ? MaglevMeet.formatNum(row.best) + " 秒" : "—";
+          if (rate) rate.textContent = row ? MaglevMeet.formatNum(row.speed) + " 米/秒" : "—";
+          if (place) {
+            place.textContent = placeNum ? "第" + placeNum + "名" : "—";
+            place.className = "place num" + (placeNum && placeNum <= 3 ? " p" + placeNum : "");
+          }
+          var t1 = tr.querySelector('[data-field="t1"]');
+          var t2 = tr.querySelector('[data-field="t2"]');
+          if (t1) t1.classList.toggle("used", !!(row && row.which === 1));
+          if (t2) t2.classList.toggle("used", !!(row && row.which === 2));
+        });
+      });
+    }
+
+    function findGroup(draft, classId, groupId) {
+      var klass = draft.classes.filter(function (item) { return item.id === classId; })[0];
+      if (!klass) return null;
+      for (var i = 0; i < klass.groups.length; i++) {
+        if (klass.groups[i].id === groupId) return klass.groups[i];
+      }
+      return null;
+    }
+
+    document.getElementById("classes").addEventListener("input", function (event) {
+      var input = event.target;
+      if (!input.dataset || !input.dataset.gid) return;
+      if (input.dataset.field === "label") {
+        session.update(function (draft) {
+          var group = findGroup(draft, input.dataset.class, input.dataset.gid);
+          if (group) group.label = input.value.trim().slice(0, 10);
+        });
+        return;
+      }
+      var parsed = MaglevMeet.parseTime(input.value);
+      input.classList.toggle("bad", !parsed.ok);
+      if (!parsed.ok || parsed.pending) return;
+      session.update(function (draft) {
+        var group = findGroup(draft, input.dataset.class, input.dataset.gid);
+        if (group) group[input.dataset.field] = parsed.value;
+      });
+    });
+
+    document.getElementById("classes").addEventListener("focusout", function (event) {
+      var input = event.target;
+      if (!input.classList || !input.classList.contains("time")) return;
+      var parsed = MaglevMeet.parseTime(input.value);
+      if (parsed.pending) parsed = MaglevMeet.parseTime(String(input.value).replace(/\.$/, ""));
+      var group = findGroup(state, input.dataset.class, input.dataset.gid);
+      if (!parsed.ok) {
+        input.value = group ? fieldText(group[input.dataset.field]) : "";
+        input.classList.remove("bad");
+        return;
+      }
+      input.classList.remove("bad");
+      input.value = parsed.value == null ? "" : MaglevMeet.formatNum(parsed.value);
+      if (!group || group[input.dataset.field] === parsed.value) return;
+      session.update(function (draft) {
+        var next = findGroup(draft, input.dataset.class, input.dataset.gid);
+        if (next) next[input.dataset.field] = parsed.value;
+      });
+    });
+
+    document.getElementById("classes").addEventListener("keydown", function (event) {
+      if (event.key !== "Enter" || !event.target.classList.contains("time")) return;
+      event.preventDefault();
+      var inputs = Array.prototype.slice.call(document.querySelectorAll("input.time"));
+      var index = inputs.indexOf(event.target);
+      if (inputs[index + 1]) inputs[index + 1].focus();
+    });
+
+    document.getElementById("classes").addEventListener("click", function (event) {
+      var button = event.target.closest("button");
+      if (!button || button.disabled) return;
+      var act = button.getAttribute("data-act");
+      var classId = button.getAttribute("data-class");
+      if (act === "add") {
+        session.update(function (draft) {
+          var klass = draft.classes.filter(function (item) { return item.id === classId; })[0];
+          if (!klass || klass.groups.length >= MaglevMeet.MAX_GROUPS) return;
+          var n = klass.groups.length + 1;
+          while (klass.groups.some(function (group) { return group.id === classId + n; })) n += 1;
+          klass.groups.push(MaglevMeet.blankGroup(classId, n));
+        });
+      }
+      if (act === "remove") {
+        var gid = button.getAttribute("data-gid");
+        if (!window.confirm("移除這個組別？已輸入的時間會一併刪除。")) return;
+        session.update(function (draft) {
+          var klass = draft.classes.filter(function (item) { return item.id === classId; })[0];
+          if (!klass || klass.groups.length <= 1) return;
+          klass.groups = klass.groups.filter(function (group) { return group.id !== gid; });
+        });
+      }
+      if (act === "clear-class") {
+        if (!window.confirm("清除" + classId + "班全部完賽時間？組別名稱會保留。")) return;
+        session.update(function (draft) {
+          var klass = draft.classes.filter(function (item) { return item.id === classId; })[0];
+          if (!klass) return;
+          klass.groups.forEach(function (group) { group.t1 = null; group.t2 = null; });
+        });
+      }
+    });
+
+    document.getElementById("clear-all").addEventListener("click", function () {
+      if (!window.confirm("清除五班全部完賽時間？組別名稱和組數會保留。")) return;
+      session.update(function (draft) {
+        draft.classes.forEach(function (klass) {
+          klass.groups.forEach(function (group) { group.t1 = null; group.t2 = null; });
+        });
+      });
+    });
+
+    session = MaglevMeet.openSession(function (view) {
+      var active = document.activeElement;
+      var editing = active && active.tagName === "INPUT" && active.dataset && active.dataset.gid;
+      var structure = state.classes.map(function (klass) { return klass.groups.map(function (group) { return group.id; }).join(); }).join("|");
+      state = view.state;
+      var nextStructure = state.classes.map(function (klass) { return klass.groups.map(function (group) { return group.id; }).join(); }).join("|");
+      paintStatus(view);
+      if (!document.querySelector(".class-card") || !editing || structure !== nextStructure) render();
+      else paintDerived();
+    });
+  </script>
+</body>
+</html>
