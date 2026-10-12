@@ -12,7 +12,20 @@
   var BUS_NAME = "maglev-meet-p3";
 
   function className(id) {
-    return "三" + id;
+    return "3" + id;
+  }
+
+  function trainIcon() {
+    return '<svg class="train" viewBox="0 0 64 48" aria-hidden="true"><rect x="4" y="18" width="34" height="18" rx="8" fill="currentColor"/><rect x="30" y="8" width="22" height="28" rx="8" fill="currentColor"/><rect x="36" y="14" width="10" height="8" rx="2" fill="#fff7d6"/><circle cx="16" cy="38" r="5" fill="#fff"/><circle cx="42" cy="38" r="5" fill="#fff"/><circle cx="16" cy="38" r="2" fill="currentColor"/><circle cx="42" cy="38" r="2" fill="currentColor"/></svg>';
+  }
+
+  function medalIcon(place) {
+    var tone = {
+      1: ["#ffe08a", "#f0b429", "#8a5a00"],
+      2: ["#f3f6fa", "#b7c3d0", "#526273"],
+      3: ["#ffd0a6", "#e08a45", "#8a4b16"]
+    }[place] || ["#e8eef5", "#b7c3d0", "#526273"];
+    return '<svg class="medal-ico" viewBox="0 0 64 64" aria-hidden="true"><path d="M22 6h8l2 16h-12z" fill="' + tone[2] + '"/><path d="M34 6h8l-2 16h-8z" fill="' + tone[1] + '"/><circle cx="32" cy="38" r="18" fill="' + tone[0] + '" stroke="' + tone[1] + '" stroke-width="4"/><text x="32" y="45" text-anchor="middle" font-size="20" font-weight="700" fill="' + tone[2] + '">' + place + "</text></svg>";
   }
 
   function cleanTime(value) {
@@ -304,6 +317,8 @@
     formatNum: formatNum,
     groupTitle: groupTitle,
     blankGroup: blankGroup,
+    trainIcon: trainIcon,
+    medalIcon: medalIcon,
     openSession: openSession
   };
 })(typeof window !== "undefined" ? window : globalThis);
