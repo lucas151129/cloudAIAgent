@@ -130,7 +130,7 @@
 
 圖像只用在課題識別：熱、力、波、電、放射各一幅，加上標誌。題目本身仍用文字和公式，不把每題做成圖片。
 
-這個儲存庫已經有一個 GitHub Pages，來源是 `main` 的根目錄，網址是 `https://lucas151129.github.io/cloudAIAgent/`。一個儲存庫只有一個 Pages。物理原型在 `prototype/`，合併後會在 `https://lucas151129.github.io/cloudAIAgent/prototype/`，不會取代天天游戲的首頁。不要改根目錄的 `index.html`，也不要把 Pages 來源改去別的資料夾。
+這個儲存庫的 GitHub Pages 來源是 `main` 的根目錄，網址是 `https://lucas151129.github.io/cloudAIAgent/`。一個儲存庫只有一個 Pages。首頁是樂善堂梁銶琚學校三年級磁浮列車計時。物理原型在 `prototype/`，合併後會在 `https://lucas151129.github.io/cloudAIAgent/prototype/`。天天游戲在另一個儲存庫，網址是 `https://lucas151129.github.io/lucas-FunLearning/`。
 
 ## 題庫先不收的內容
 
@@ -146,6 +146,6 @@
 
 ## 原型和正式版
 
-原型可以點：課題掌握、三題批改（選擇、數值、蒸發解釋）、錯題本狀態會隨作答改變、班別的薄弱清單。按「還原示例數據」回到起點。原型放在 `prototype/`，沒有改現有的天天游戲網站。
+原型可以點：課題掌握、三題批改（選擇、數值、蒸發解釋）、錯題本狀態會隨作答改變、班別的薄弱清單。按「還原示例數據」回到起點。原型放在 `prototype/`，首頁仍是磁浮列車計時。
 
 正式版在這套框架上加：帳號、把題庫按上面的格式匯入、批改改到伺服器、掌握改成最近 8 次加權。選修、手寫拍照、公開排名都不在第一版。
