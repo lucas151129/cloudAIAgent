@@ -21,7 +21,6 @@
         <div>
           <p class="kicker">樂善堂梁銶琚學校 · 小學三年級</p>
           <h1>磁浮列車計分</h1>
-          <p class="lead">五班 3A 至 3E，每班可設 4 至 8 組，預設 5 組。每組輸入兩次完賽時間（秒）。完成時間取較快的一次，速率＝6 米÷完成時間。大螢幕只顯示每班前三名。</p>
         </div>
       </div>
       <div class="actions">
@@ -29,7 +28,6 @@
         <button type="button" class="warn" id="clear-all">清除全部成績</button>
       </div>
     </header>
-    <p class="status" id="status" role="status">正在讀取成績…</p>
     <main id="classes"></main>
   </div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -43,20 +41,6 @@
       return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
       });
-    }
-
-    function paintStatus(view) {
-      var el = document.getElementById("status");
-      el.className = "status " + view.status;
-      if (view.status === "cloud") {
-        el.textContent = "已連上雲端。另一部裝置打開大螢幕，會即時看到這裡的成績。";
-      } else if (view.status === "need-sql") {
-        el.textContent = "雲端成績表還沒建立，現在只在這部瀏覽器同步。請到 Supabase SQL Editor 執行 supabase/maglev-board.sql。";
-      } else if (view.status === "error") {
-        el.textContent = "雲端暫時寫不入，這部瀏覽器裡的成績仍會保留。";
-      } else {
-        el.textContent = "尚未連上雲端。同一部電腦的大螢幕分頁會跟著更新。";
-      }
     }
 
     function fieldText(value) {
@@ -241,7 +225,6 @@
       var structure = state.classes.map(function (klass) { return klass.groups.map(function (group) { return group.id; }).join(); }).join("|");
       state = view.state;
       var nextStructure = state.classes.map(function (klass) { return klass.groups.map(function (group) { return group.id; }).join(); }).join("|");
-      paintStatus(view);
       if (!document.querySelector(".class-card") || !editing || structure !== nextStructure) render();
       else paintDerived();
     });
