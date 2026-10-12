@@ -5,6 +5,9 @@ const state = {
   lastResult: null,
   mistakes: [],
   baseline: null,
+  grading: false,
+  settingsNotice: "",
+  keyDraft: "",
 };
 
 function allPoints(chapter) {
@@ -112,6 +115,7 @@ function route() {
   if (name === "practice") return { name, id: parts[1] || this.QUESTIONS[0].id };
   if (name === "mistakes") return { name, filter: parts[1] || "all" };
   if (name === "class") return { name: "class" };
+  if (name === "settings") return { name: "settings" };
   return { name: "home" };
 }
 
@@ -228,6 +232,7 @@ function render() {
     practice: "做題",
     mistakes: "錯題本",
     class: "班別",
+    settings: "DeepSeek",
   };
   document.title = titles[current.name] + " · FunLearning 物理";
   for (const link of document.querySelectorAll(".nav a")) {
@@ -238,10 +243,17 @@ function render() {
     else link.removeAttribute("aria-current");
   }
   document.querySelector("#mistake-count").textContent = String(openMistakes().length);
+  const keyState = document.querySelector("#deepseek-state");
+  if (keyState) {
+    const ready = deepseekReady();
+    keyState.textContent = ready ? "已接上" : "未接上";
+    keyState.classList.toggle("on", ready);
+  }
   if (current.name === "chapter") main.innerHTML = renderChapter(current.id);
   else if (current.name === "practice") main.innerHTML = renderPractice(current.id);
   else if (current.name === "mistakes") main.innerHTML = renderMistakes(current.filter);
   else if (current.name === "class") main.innerHTML = renderClass();
+  else if (current.name === "settings") main.innerHTML = renderSettings();
   else main.innerHTML = renderHome();
   main.focus({ preventScroll: true });
 }
@@ -430,7 +442,11 @@ function renderPractice(id) {
       : state.formError
         ? '<p class="form-error">' + esc(state.formError) + "</p>"
         : "") +
-    '<div class="actions"><button class="btn" type="submit">批改這題</button></div></form>' +
+    '<div class="actions"><button class="btn" type="submit"' +
+    (state.grading ? " disabled" : "") +
+    ">" +
+    (state.grading ? "批改中…" : "批改這題") +
+    "</button></div></form>" +
     renderResult(question) +
     "</article></div>"
   );
@@ -438,7 +454,10 @@ function renderPractice(id) {
 
 function graderNote(question) {
   if (question.type === "structured") {
-    return '<p class="grader-note">交卷前不顯示評分準則。交卷後逐點標出得到或未得。換句話說而意思相同的答案，正式版由模型判斷，不靠頁面上的字眼對照。</p>';
+    if (deepseekReady()) {
+      return '<p class="grader-note">這題交給 DeepSeek（deepseek-flash）按評分準則批改。送出的是題目、準則和這次答案，不含姓名。</p>';
+    }
+    return '<p class="grader-note">尚未貼上 DeepSeek 金鑰，這次先用要點對照。到側欄 DeepSeek 貼上金鑰後，同義答案改由模型判斷。</p>';
   }
   if (question.type === "numeric") {
     return '<p class="grader-note">程式核對最終數值和單位。可辨認的錯步會按題目設定給部分分，並寫出錯在哪一步。</p>';
@@ -672,14 +691,89 @@ function renderClass() {
   );
 }
 
+function renderSettings() {
+  const ready = deepseekReady();
+  return (
+    '<div class="wrap"><p class="kicker">結構題</p><h1>DeepSeek</h1>' +
+    '<p class="lede">貼上你的 DeepSeek 金鑰後，結構題會送到 deepseek-flash，按評分準則判斷要點有沒有達到。選擇題和數值題仍由程式批改，不送出。</p>' +
+    '<p class="note">金鑰只存在這部瀏覽器，不會寫進 GitHub 專案。公開網頁的原始碼裡不放金鑰，避免別人用你的餘額。</p>' +
+    '<form class="answer" id="key-form">' +
+    '<label class="field"><span>API 金鑰</span><input id="deepseek-key" name="key" type="password" autocomplete="off" spellcheck="false" placeholder="' +
+    (ready ? "已儲存。貼上新金鑰可取代" : "sk-…") +
+    '" value="' +
+    esc(state.keyDraft) +
+    '"></label>' +
+    (state.settingsNotice ? '<p class="grader-note">' + esc(state.settingsNotice) + "</p>" : "") +
+    '<div class="actions"><button class="btn" type="button" data-act="save-key">儲存金鑰</button>' +
+    '<button class="quiet" type="button" data-act="test-key">測試連線</button>' +
+    '<button class="quiet" type="button" data-act="clear-key">清除</button></div></form>' +
+    '<p class="note">' +
+    (ready ? "這部瀏覽器已接上 DeepSeek。結構題會呼叫模型。" : "尚未接上。結構題暫時用要點對照。") +
+    "</p></div>"
+  );
+}
+
 function onMainClick(event) {
   const sort = event.target.closest("[data-sort]");
-  if (!sort) return;
-  state.homeSort = sort.dataset.sort;
+  if (sort) {
+    state.homeSort = sort.dataset.sort;
+    render();
+    return;
+  }
+  const act = event.target.closest("[data-act]");
+  if (!act) return;
+  if (act.dataset.act === "save-key") saveKeyFromForm();
+  if (act.dataset.act === "clear-key") {
+    clearDeepseekKey();
+    state.keyDraft = "";
+    state.settingsNotice = "已清除這部瀏覽器裡的金鑰。";
+    render();
+  }
+  if (act.dataset.act === "test-key") testKeyFromForm();
+}
+
+function saveKeyFromForm() {
+  const field = document.querySelector("#deepseek-key");
+  const value = field ? field.value.trim() : "";
+  if (!value) {
+    state.settingsNotice = "先貼上金鑰。";
+    render();
+    return;
+  }
+  saveDeepseekKey(value);
+  state.keyDraft = "";
+  state.settingsNotice = "已儲存。金鑰只留在這部瀏覽器。";
+  render();
+}
+
+async function testKeyFromForm() {
+  const field = document.querySelector("#deepseek-key");
+  const typed = field ? field.value.trim() : "";
+  const key = typed || deepseekKey();
+  if (!key) {
+    state.settingsNotice = "先貼上金鑰。";
+    render();
+    return;
+  }
+  state.keyDraft = typed;
+  state.settingsNotice = "正在連線 DeepSeek…";
+  render();
+  try {
+    await pingDeepseek(key);
+    if (typed) saveDeepseekKey(typed);
+    state.keyDraft = "";
+    state.settingsNotice = "已連上 deepseek-flash。結構題會交給它批改。";
+  } catch (err) {
+    state.settingsNotice = err.message || "連線失敗。";
+  }
   render();
 }
 
 function onInput(event) {
+  if (event.target.id === "deepseek-key") {
+    state.keyDraft = event.target.value;
+    return;
+  }
   const form = event.target.form;
   if (!form || !form.dataset.qid) return;
   const draft = state.drafts[form.dataset.qid] || {};
@@ -690,26 +784,8 @@ function onInput(event) {
   state.drafts[form.dataset.qid] = draft;
 }
 
-function onSubmit(event) {
-  const form = event.target;
-  if (!form.dataset || !form.dataset.qid) return;
-  event.preventDefault();
-  const question = questionById(form.dataset.qid);
-  const data = new FormData(form);
-  const response = {
-    choice: data.get("choice") || "",
-    value: data.get("value") || "",
-    unit: data.get("unit") || "",
-    text: data.get("text") || "",
-  };
-  state.drafts[question.id] = response;
-  const graded = gradeQuestion(question, response);
-  if (graded.error) {
-    state.formError = graded.error;
-    state.lastResult = state.lastResult && state.lastResult.questionId === question.id ? null : state.lastResult;
-    render();
-    return;
-  }
+function finishGrade(question, graded) {
+  state.grading = false;
   state.formError = "";
   const found = findKp(question.kpId);
   const before = found.kp.score == null ? "—" : String(found.kp.score);
@@ -726,6 +802,58 @@ function onSubmit(event) {
   render();
   const result = document.querySelector("#result");
   if (result) result.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function onSubmit(event) {
+  const form = event.target;
+  if (!form.dataset || !form.dataset.qid) {
+    if (form.id === "key-form") {
+      event.preventDefault();
+      saveKeyFromForm();
+    }
+    return;
+  }
+  event.preventDefault();
+  if (state.grading) return;
+  const question = questionById(form.dataset.qid);
+  const data = new FormData(form);
+  const response = {
+    choice: data.get("choice") || "",
+    value: data.get("value") || "",
+    unit: data.get("unit") || "",
+    text: data.get("text") || "",
+  };
+  state.drafts[question.id] = response;
+  if (question.type === "structured" && deepseekReady()) {
+    const draft = String(response.text || "").trim();
+    if (!draft) {
+      state.formError = "請先寫下解釋。";
+      state.lastResult = null;
+      render();
+      return;
+    }
+    state.formError = "";
+    state.grading = true;
+    state.lastResult = null;
+    render();
+    try {
+      const graded = await gradeWithDeepseek(question, draft);
+      finishGrade(question, graded);
+    } catch (err) {
+      state.grading = false;
+      state.formError = err.message || "DeepSeek 批改失敗。";
+      render();
+    }
+    return;
+  }
+  const graded = gradeQuestion(question, response);
+  if (graded.error) {
+    state.formError = graded.error;
+    state.lastResult = state.lastResult && state.lastResult.questionId === question.id ? null : state.lastResult;
+    render();
+    return;
+  }
+  finishGrade(question, graded);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

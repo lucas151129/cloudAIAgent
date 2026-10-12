@@ -6,8 +6,9 @@ const context = {};
 vm.createContext(context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "data.js"), "utf8"), context);
 vm.runInContext(fs.readFileSync(path.join(__dirname, "grader.js"), "utf8"), context);
+vm.runInContext(fs.readFileSync(path.join(__dirname, "deepseek.js"), "utf8"), context);
 
-const { QUESTIONS, CHAPTERS, parseNumber, gradeQuestion } = context;
+const { QUESTIONS, CHAPTERS, parseNumber, gradeQuestion, interpretDeepseekGrade } = context;
 const q = Object.fromEntries(QUESTIONS.map((item) => [item.id, item]));
 
 function assert(name, condition) {
@@ -63,6 +64,28 @@ assert("evap empty", gradeQuestion(q["q-evap"], { text: "  " }).error);
 
 const paraphrase = "能量高的分子走了，剩下的分子平均動能變低，溫度就下降。";
 assert("evap paraphrase", gradeQuestion(q["q-evap"], { text: paraphrase }).earned === 3);
+
+const evap = q["q-evap"];
+const fromModel = interpretDeepseekGrade(
+  evap,
+  "水變涼",
+  JSON.stringify({
+    points: [
+      { id: "fast", hit: true },
+      { id: "remain", hit: false },
+      { id: "temp", hit: "得到" },
+    ],
+    detail: "提到分子離開，也提到溫度。",
+    reason: "未寫留下的分子",
+  })
+);
+assert("deepseek marks", fromModel.earned === 2 && fromModel.source === "deepseek");
+assert("deepseek miss remain", fromModel.points.find((point) => point.id === "remain").hit === false);
+assert(
+  "deepseek fenced",
+  interpretDeepseekGrade(evap, "x", "```json\n{\"points\":[]}\n```").earned === 0
+);
+assert("deepseek bad json", interpretDeepseekGrade(evap, "x", "不是 json").error);
 
 let points = 0;
 for (const chapter of CHAPTERS) {

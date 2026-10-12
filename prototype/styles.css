@@ -137,6 +137,13 @@ img { display: block; max-width: 100%; }
   color: var(--ink);
 }
 
+.nav .key-state {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.nav .key-state.on { color: var(--mastered); }
+
 .rail-foot {
   margin-top: auto;
   color: var(--muted);
@@ -534,6 +541,17 @@ textarea {
 
 .btn:hover { background: #000; }
 
+.btn:disabled { opacity: 0.55; cursor: wait; }
+
+button.quiet {
+  background: none;
+  border: 0;
+  padding: 11px 4px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .form-error {
   margin: 0 0 12px;
   color: var(--weak);
@@ -695,6 +713,7 @@ textarea {
   .nav { flex-direction: row; gap: 2px; overflow: auto; }
   .nav a { white-space: nowrap; }
   .nav .count { margin-left: 6px; }
+  .nav .key-state { display: none; }
   .rail-foot { display: none; }
 
   main { padding: 28px 16px 72px; }
