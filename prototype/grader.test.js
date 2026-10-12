@@ -86,6 +86,12 @@ assert(
   interpretDeepseekGrade(evap, "x", "```json\n{\"points\":[]}\n```").earned === 0
 );
 assert("deepseek bad json", interpretDeepseekGrade(evap, "x", "不是 json").error);
+const clientSource = fs.readFileSync(path.join(__dirname, "deepseek.js"), "utf8");
+assert("client does not call DeepSeek", !clientSource.includes("api.deepseek.com"));
+assert("client does not store a key", !clientSource.includes("localStorage"));
+const proxySource = fs.readFileSync(path.join(__dirname, "../supabase/functions/grade-physics/index.ts"), "utf8");
+assert("proxy reads server secret", proxySource.includes('Deno.env.get("DEEPSEEK_API_KEY")'));
+assert("proxy has no pasted key", !/sk-[A-Za-z0-9]{8,}/.test(proxySource));
 
 let points = 0;
 for (const chapter of CHAPTERS) {

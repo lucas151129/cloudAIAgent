@@ -1,27 +1,16 @@
-var DEEPSEEK_STORAGE = "funlearning-deepseek-key";
-var DEEPSEEK_MODEL = "deepseek-flash";
-var DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+var GRADE_ENDPOINT = "https://inwrpyaaryzkkruzcbgm.supabase.co/functions/v1/grade-physics";
 
-function deepseekKey() {
-  try {
-    return (localStorage.getItem(DEEPSEEK_STORAGE) || "").trim();
-  } catch (err) {
-    return "";
+function gradeAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (typeof SUPABASE_ANON_KEY === "string" && SUPABASE_ANON_KEY) {
+    headers.Authorization = "Bearer " + SUPABASE_ANON_KEY;
+    headers.apikey = SUPABASE_ANON_KEY;
   }
+  return headers;
 }
 
 function deepseekReady() {
-  return deepseekKey().length > 10;
-}
-
-function saveDeepseekKey(value) {
-  const key = String(value || "").trim();
-  if (!key) localStorage.removeItem(DEEPSEEK_STORAGE);
-  else localStorage.setItem(DEEPSEEK_STORAGE, key);
-}
-
-function clearDeepseekKey() {
-  localStorage.removeItem(DEEPSEEK_STORAGE);
+  return typeof state !== "undefined" && state.gradeService === "ready";
 }
 
 function parseModelJson(content) {
@@ -41,7 +30,7 @@ function interpretDeepseekGrade(question, answerText, content) {
   try {
     parsed = parseModelJson(content);
   } catch (err) {
-    return { error: "DeepSeek 沒有交回可用的評分，請再交一次。" };
+    return { error: "批改沒有交回可用的評分，請再交一次。" };
   }
   const returned = Array.isArray(parsed.points) ? parsed.points : [];
   const points = question.points.map((point) => {
@@ -66,7 +55,7 @@ function interpretDeepseekGrade(question, answerText, content) {
   return {
     earned: earned,
     marks: question.marks,
-    headline: earned === question.marks ? "DeepSeek：要點都有" : "DeepSeek 給了 " + earned + " 分",
+    headline: earned === question.marks ? "要點都有" : "給了 " + earned + " 分",
     detail: detail,
     reason: reason,
     points: points,
@@ -76,38 +65,22 @@ function interpretDeepseekGrade(question, answerText, content) {
   };
 }
 
-function deepseekError(status, bodyText) {
-  if (status === 401) return "金鑰被拒絕。到 DeepSeek 頁檢查這把金鑰。";
-  if (status === 402) return "DeepSeek 餘額不足。";
-  if (status === 429) return "DeepSeek 暫時太忙，稍後再交。";
-  return "DeepSeek 回覆 " + status + "。" + (bodyText ? " " + String(bodyText).slice(0, 140) : "");
-}
-
-async function callDeepseek(key, payload) {
-  let response;
+async function refreshGradeService() {
+  state.gradeService = "checking";
   try {
-    response = await fetch(DEEPSEEK_URL, {
+    const response = await fetch(GRADE_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + key,
-      },
-      body: JSON.stringify(payload),
+      headers: gradeAuthHeaders(),
+      body: JSON.stringify({ ping: true }),
     });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok && data.configured) state.gradeService = "ready";
+    else if (response.ok && data.configured === false) state.gradeService = "missing";
+    else state.gradeService = "down";
   } catch (err) {
-    throw new Error("連不到 DeepSeek。檢查網絡後再試。");
+    state.gradeService = "down";
   }
-  const raw = await response.text();
-  if (!response.ok) throw new Error(deepseekError(response.status, raw));
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch (err) {
-    throw new Error("DeepSeek 回覆無法讀取。");
-  }
-  const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-  if (!content) throw new Error("DeepSeek 沒有給出評分，請再交一次。");
-  return content;
+  render();
 }
 
 async function gradeWithDeepseek(question, answerText) {
@@ -116,38 +89,28 @@ async function gradeWithDeepseek(question, answerText) {
     marks: point.marks,
     text: point.text,
   }));
-  const content = await callDeepseek(deepseekKey(), {
-    model: DEEPSEEK_MODEL,
-    thinking: { type: "disabled" },
-    response_format: { type: "json_object" },
-    max_tokens: 800,
-    messages: [
-      {
-        role: "system",
-        content:
-          "你是香港高中物理教師。按評分準則批改學生答案。意思相同就算該點得到，不必和參考講法逐字相同。不要自加準則以外的扣分。只回覆 json，格式是 {\"points\":[{\"id\":\"準則id\",\"hit\":true}],\"detail\":\"給學生的訂正，繁體中文\",\"reason\":\"二十字以內的錯因\"}。",
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          stem: question.stem,
-          scheme: scheme,
-          reference: question.model || "",
-          answer: answerText,
-        }),
-      },
-    ],
-  });
-  const graded = interpretDeepseekGrade(question, answerText, content);
+  let response;
+  try {
+    response = await fetch(GRADE_ENDPOINT, {
+      method: "POST",
+      headers: gradeAuthHeaders(),
+      body: JSON.stringify({
+        stem: question.stem,
+        scheme: scheme,
+        reference: question.model || "",
+        answer: answerText,
+      }),
+    });
+  } catch (err) {
+    throw new Error("連不到批改服務。");
+  }
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || "批改服務暫時無法使用。");
+    error.fallback = Boolean(data.fallback);
+    throw error;
+  }
+  const graded = interpretDeepseekGrade(question, answerText, data.content);
   if (graded.error) throw new Error(graded.error);
   return graded;
-}
-
-async function pingDeepseek(key) {
-  await callDeepseek(key, {
-    model: DEEPSEEK_MODEL,
-    thinking: { type: "disabled" },
-    max_tokens: 16,
-    messages: [{ role: "user", content: "只回覆 ok" }],
-  });
 }

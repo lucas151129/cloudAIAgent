@@ -6,8 +6,7 @@ const state = {
   mistakes: [],
   baseline: null,
   grading: false,
-  settingsNotice: "",
-  keyDraft: "",
+  gradeService: "checking",
 };
 
 function allPoints(chapter) {
@@ -245,9 +244,9 @@ function render() {
   document.querySelector("#mistake-count").textContent = String(openMistakes().length);
   const keyState = document.querySelector("#deepseek-state");
   if (keyState) {
-    const ready = deepseekReady();
-    keyState.textContent = ready ? "已接上" : "未接上";
-    keyState.classList.toggle("on", ready);
+    const labels = { checking: "檢查中", ready: "已接上", missing: "未設定", down: "未接上" };
+    keyState.textContent = labels[state.gradeService] || "未接上";
+    keyState.classList.toggle("on", state.gradeService === "ready");
   }
   if (current.name === "chapter") main.innerHTML = renderChapter(current.id);
   else if (current.name === "practice") main.innerHTML = renderPractice(current.id);
@@ -455,9 +454,9 @@ function renderPractice(id) {
 function graderNote(question) {
   if (question.type === "structured") {
     if (deepseekReady()) {
-      return '<p class="grader-note">這題交給 DeepSeek（deepseek-flash）按評分準則批改。送出的是題目、準則和這次答案，不含姓名。</p>';
+      return '<p class="grader-note">這題由伺服器上的 DeepSeek 按評分準則批改。網頁裡沒有金鑰，送出的是題目、準則和這次答案。</p>';
     }
-    return '<p class="grader-note">尚未貼上 DeepSeek 金鑰，這次先用要點對照。到側欄 DeepSeek 貼上金鑰後，同義答案改由模型判斷。</p>';
+    return '<p class="grader-note">批改服務尚未接上，這次先用要點對照。金鑰放在伺服器，學生頁面裡看不到。</p>';
   }
   if (question.type === "numeric") {
     return '<p class="grader-note">程式核對最終數值和單位。可辨認的錯步會按題目設定給部分分，並寫出錯在哪一步。</p>';
@@ -692,24 +691,19 @@ function renderClass() {
 }
 
 function renderSettings() {
-  const ready = deepseekReady();
+  const status = {
+    checking: "正在檢查批改服務。",
+    ready: "已接上。學生交結構題時，由伺服器上的 DeepSeek 批改。",
+    missing: "服務有回應，但伺服器尚未放入金鑰。結構題暫時用要點對照。",
+    down: "還連不到批改服務。結構題暫時用要點對照。",
+  };
   return (
-    '<div class="wrap"><p class="kicker">結構題</p><h1>DeepSeek</h1>' +
-    '<p class="lede">貼上你的 DeepSeek 金鑰後，結構題會送到 deepseek-flash，按評分準則判斷要點有沒有達到。選擇題和數值題仍由程式批改，不送出。</p>' +
-    '<p class="note">金鑰只存在這部瀏覽器，不會寫進 GitHub 專案。公開網頁的原始碼裡不放金鑰，避免別人用你的餘額。</p>' +
-    '<form class="answer" id="key-form">' +
-    '<label class="field"><span>API 金鑰</span><input id="deepseek-key" name="key" type="password" autocomplete="off" spellcheck="false" placeholder="' +
-    (ready ? "已儲存。貼上新金鑰可取代" : "sk-…") +
-    '" value="' +
-    esc(state.keyDraft) +
-    '"></label>' +
-    (state.settingsNotice ? '<p class="grader-note">' + esc(state.settingsNotice) + "</p>" : "") +
-    '<div class="actions"><button class="btn" type="button" data-act="save-key">儲存金鑰</button>' +
-    '<button class="quiet" type="button" data-act="test-key">測試連線</button>' +
-    '<button class="quiet" type="button" data-act="clear-key">清除</button></div></form>' +
-    '<p class="note">' +
-    (ready ? "這部瀏覽器已接上 DeepSeek。結構題會呼叫模型。" : "尚未接上。結構題暫時用要點對照。") +
-    "</p></div>"
+    '<div class="wrap"><p class="kicker">結構題</p><h1>批改服務</h1>' +
+    '<p class="lede">學生直接做題，不必持有金鑰，也無法在頁面裡看到金鑰。瀏覽器只把答案送到我們的批改服務，服務再用放在伺服器上的 DeepSeek 金鑰去批改。</p>' +
+    '<p class="note">把金鑰加密後放進網頁做不到這件事。瀏覽器若自己持有金鑰，原始碼和網絡請求裡就看得到。金鑰只放在 Supabase 的環境變數 DEEPSEEK_API_KEY。</p>' +
+    '<p class="grader-note">' +
+    esc(status[state.gradeService] || status.down) +
+    '</p><div class="actions"><button class="btn" type="button" data-act="check-service">重新檢查</button></div></div>'
   );
 }
 
@@ -722,58 +716,10 @@ function onMainClick(event) {
   }
   const act = event.target.closest("[data-act]");
   if (!act) return;
-  if (act.dataset.act === "save-key") saveKeyFromForm();
-  if (act.dataset.act === "clear-key") {
-    clearDeepseekKey();
-    state.keyDraft = "";
-    state.settingsNotice = "已清除這部瀏覽器裡的金鑰。";
-    render();
-  }
-  if (act.dataset.act === "test-key") testKeyFromForm();
-}
-
-function saveKeyFromForm() {
-  const field = document.querySelector("#deepseek-key");
-  const value = field ? field.value.trim() : "";
-  if (!value) {
-    state.settingsNotice = "先貼上金鑰。";
-    render();
-    return;
-  }
-  saveDeepseekKey(value);
-  state.keyDraft = "";
-  state.settingsNotice = "已儲存。金鑰只留在這部瀏覽器。";
-  render();
-}
-
-async function testKeyFromForm() {
-  const field = document.querySelector("#deepseek-key");
-  const typed = field ? field.value.trim() : "";
-  const key = typed || deepseekKey();
-  if (!key) {
-    state.settingsNotice = "先貼上金鑰。";
-    render();
-    return;
-  }
-  state.keyDraft = typed;
-  state.settingsNotice = "正在連線 DeepSeek…";
-  render();
-  try {
-    await pingDeepseek(key);
-    if (typed) saveDeepseekKey(typed);
-    state.keyDraft = "";
-    state.settingsNotice = "已連上 deepseek-flash。結構題會交給它批改。";
-  } catch (err) {
-    state.settingsNotice = err.message || "連線失敗。";
-  }
-  render();
+  if (act.dataset.act === "check-service") refreshGradeService();
 }
 
 function onInput(event) {
-  if (event.target.id === "deepseek-key") {
-    state.keyDraft = event.target.value;
-    return;
-  }
   const form = event.target.form;
   if (!form || !form.dataset.qid) return;
   const draft = state.drafts[form.dataset.qid] || {};
@@ -806,13 +752,7 @@ function finishGrade(question, graded) {
 
 async function onSubmit(event) {
   const form = event.target;
-  if (!form.dataset || !form.dataset.qid) {
-    if (form.id === "key-form") {
-      event.preventDefault();
-      saveKeyFromForm();
-    }
-    return;
-  }
+  if (!form.dataset || !form.dataset.qid) return;
   event.preventDefault();
   if (state.grading) return;
   const question = questionById(form.dataset.qid);
@@ -841,7 +781,15 @@ async function onSubmit(event) {
       finishGrade(question, graded);
     } catch (err) {
       state.grading = false;
-      state.formError = err.message || "DeepSeek 批改失敗。";
+      if (err.fallback) {
+        const local = gradeQuestion(question, response);
+        if (!local.error) {
+          local.detail = err.message + " " + local.detail;
+          finishGrade(question, local);
+          return;
+        }
+      }
+      state.formError = err.message || "批改失敗。";
       render();
     }
     return;
@@ -874,4 +822,5 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   if (!location.hash) location.hash = "#/";
   render();
+  refreshGradeService();
 });
